@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 
-const API = "http://localhost:3000";
+const API = "https://YOUR-RENDER-URL.onrender.com";
 
 export default function App() {
   const [input, setInput] = useState("");
