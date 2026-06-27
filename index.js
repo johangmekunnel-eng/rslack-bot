@@ -5,11 +5,11 @@ const cors = require("cors");
 const axios = require("axios");
 const fs = require("fs");
 
-const api = express();
-api.use(cors());
-api.use(express.json());
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-// -------------------- SIMPLE JSON DATABASE --------------------
+// -------------------- DATABASE (JSON) --------------------
 const DB_FILE = "./db.json";
 
 function loadDB() {
@@ -24,32 +24,13 @@ function saveDB(db) {
 }
 
 // -------------------- PROMPTS --------------------
-const GENERAL_PROMPT = `
-You are R-Money, a helpful AI assistant.
-Keep answers concise and clear.
-`;
+const GENERAL_PROMPT = `You are a helpful AI assistant. Be concise.`;
+const GUIDE_PROMPT = `You are a teacher. Create structured study guides.`;
+const SUMMARY_PROMPT = `You are a summarizer. Be clear and structured.`;
 
-const STUDY_GUIDE_PROMPT = `
-You are an expert high school tutor.
-
-Create structured study guides with:
-- Overview
-- Key Concepts
-- Examples
-- Practice Questions
-`;
-
-const SUMMARY_PROMPT = `
-You are an expert summarizer.
-Return:
-- Summary
-- Key Points
-- Important Terms
-`;
-
-// -------------------- GROQ AI --------------------
-async function getAIResponse(systemPrompt, userPrompt) {
-  const response = await axios.post(
+// -------------------- AI FUNCTION --------------------
+async function getAI(systemPrompt, userPrompt) {
+  const res = await axios.post(
     "https://api.groq.com/openai/v1/chat/completions",
     {
       model: "llama-3.1-8b-instant",
@@ -66,100 +47,67 @@ async function getAIResponse(systemPrompt, userPrompt) {
     }
   );
 
-  return response.data.choices[0].message.content;
+  return res.data.choices[0].message.content;
 }
 
-// -------------------- AI CHAT --------------------
-api.post("/api/ai", async (req, res) => {
-  const { message, userId } = req.body;
+// -------------------- ROUTES --------------------
 
+// AI CHAT
+app.post("/api/ai", async (req, res) => {
   try {
-    const response = await getAIResponse(GENERAL_PROMPT, message);
+    const { message } = req.body;
+    const response = await getAI(GENERAL_PROMPT, message);
     res.json({ response });
-  } catch (err) {
-    console.log(err.message);
+  } catch (e) {
     res.status(500).json({ error: "AI failed" });
   }
 });
 
-// -------------------- STUDY GUIDE --------------------
-api.post("/api/guide", async (req, res) => {
-  const { topic, userId } = req.body;
-
-  if (!topic) return res.status(400).json({ error: "No topic provided" });
-
+// STUDY GUIDE
+app.post("/api/guide", async (req, res) => {
   try {
-    const answer = await getAIResponse(STUDY_GUIDE_PROMPT, topic);
+    const { topic, userId } = req.body;
+
+    const response = await getAI(GUIDE_PROMPT, topic);
 
     const db = loadDB();
-
-    db.guides.push({
-      userId,
-      topic,
-      content: answer,
-      createdAt: Date.now()
-    });
-
+    db.guides.push({ userId, topic, content: response });
     saveDB(db);
 
-    res.json({ response: answer });
-  } catch (err) {
-    console.log(err.message);
-    res.status(500).json({ error: "Failed to create guide" });
+    res.json({ response });
+  } catch (e) {
+    res.status(500).json({ error: "Guide failed" });
   }
 });
 
-// -------------------- SUMMARY --------------------
-api.post("/api/summarize", async (req, res) => {
-  const { text, userId } = req.body;
-
-  if (!text) return res.status(400).json({ error: "No text provided" });
-
+// SUMMARY
+app.post("/api/summarize", async (req, res) => {
   try {
-    const answer = await getAIResponse(SUMMARY_PROMPT, text);
+    const { text, userId } = req.body;
+
+    const response = await getAI(SUMMARY_PROMPT, text);
 
     const db = loadDB();
-
-    db.summaries.push({
-      userId,
-      content: answer,
-      createdAt: Date.now()
-    });
-
+    db.summaries.push({ userId, content: response });
     saveDB(db);
 
-    res.json({ response: answer });
-  } catch (err) {
-    console.log(err.message);
-    res.status(500).json({ error: "Failed to summarize" });
+    res.json({ response });
+  } catch (e) {
+    res.status(500).json({ error: "Summary failed" });
   }
 });
 
-// -------------------- GET ALL GUIDES --------------------
-api.get("/api/guides/:userId", (req, res) => {
+// GET DATA
+app.get("/api/guides/:userId", (req, res) => {
   const db = loadDB();
-
-  const userGuides = db.guides.filter(
-    (g) => g.userId === req.params.userId
-  );
-
-  res.json(userGuides);
+  res.json(db.guides.filter(g => g.userId === req.params.userId));
 });
 
-// -------------------- GET ALL SUMMARIES --------------------
-api.get("/api/summaries/:userId", (req, res) => {
+app.get("/api/summaries/:userId", (req, res) => {
   const db = loadDB();
-
-  const userSummaries = db.summaries.filter(
-    (s) => s.userId === req.params.userId
-  );
-
-  res.json(userSummaries);
+  res.json(db.summaries.filter(s => s.userId === req.params.userId));
 });
 
-// -------------------- START SERVER --------------------
+// -------------------- START --------------------
 const PORT = process.env.PORT || 3000;
-
-api.listen(PORT, () => {
-  console.log(`API running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log("API running on", PORT));

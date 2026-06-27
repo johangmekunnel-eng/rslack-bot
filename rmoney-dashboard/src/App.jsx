@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 
-const API = "https://YOUR-RENDER-URL.onrender.com";
+const API = "https://rslack-bot.onrender.com";
 
 export default function App() {
   const [input, setInput] = useState("");
