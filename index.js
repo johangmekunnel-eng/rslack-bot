@@ -108,6 +108,14 @@ app.get("/api/summaries/:userId", (req, res) => {
   res.json(db.summaries.filter(s => s.userId === req.params.userId));
 });
 
+app.get("/", (req, res) => {
+  res.json({
+    status: "online",
+    message: "R-Money API is running 🚀",
+    routes: ["/api/ai", "/api/guide", "/api/summarize"]
+  });
+});
+
 // -------------------- START --------------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("API running on", PORT));
