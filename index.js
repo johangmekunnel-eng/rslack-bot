@@ -4,16 +4,13 @@ const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
 const fs = require("fs");
+const path = require("path");
 
 const app = express();
 
 // -------------------- MIDDLEWARE --------------------
 
-// Allow frontend (Vercel) to connect
-app.use(cors({
-  origin: "*", // later you can lock this to your Vercel URL
-}));
-
+app.use(cors());
 app.use(express.json());
 
 // -------------------- DATABASE (JSON FILE) --------------------
@@ -43,13 +40,13 @@ function saveDB(db) {
 // -------------------- PROMPTS --------------------
 
 const GENERAL_PROMPT = `
-You are a helpful AI assistant. Be clear, concise, and helpful.
+You are a helpful AI assistant. Be clear and concise.
 `;
 
 const GUIDE_PROMPT = `
 You are an expert teacher.
 
-Create structured study guides with:
+Create structured study guides:
 - Overview
 - Key Concepts
 - Examples
@@ -57,9 +54,7 @@ Create structured study guides with:
 `;
 
 const SUMMARY_PROMPT = `
-You are an expert summarizer.
-
-Return:
+You are an expert summarizer:
 - Summary
 - Key Points
 - Important Terms
@@ -68,36 +63,30 @@ Return:
 // -------------------- AI FUNCTION --------------------
 
 async function getAI(systemPrompt, userPrompt) {
-  try {
-    const res = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        model: "llama-3.1-8b-instant",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json"
-        }
+  const res = await axios.post(
+    "https://api.groq.com/openai/v1/chat/completions",
+    {
+      model: "llama-3.1-8b-instant",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ]
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        "Content-Type": "application/json"
       }
-    );
+    }
+  );
 
-    return res.data.choices[0].message.content;
-
-  } catch (err) {
-    console.log("Groq API error:", err.response?.data || err.message);
-    throw new Error("AI request failed");
-  }
+  return res.data.choices[0].message.content;
 }
 
-// -------------------- ROUTES --------------------
+// -------------------- API ROUTES --------------------
 
-// Health check (Render uses this sometimes)
-app.get("/", (req, res) => {
+// Health check
+app.get("/api", (req, res) => {
   res.json({
     status: "online",
     message: "R-Money API is running 🚀",
@@ -105,35 +94,25 @@ app.get("/", (req, res) => {
   });
 });
 
-// -------------------- AI CHAT --------------------
-
+// AI CHAT
 app.post("/api/ai", async (req, res) => {
   try {
     const { message } = req.body;
-
-    if (!message) {
-      return res.status(400).json({ error: "Message required" });
-    }
+    if (!message) return res.status(400).json({ error: "Message required" });
 
     const response = await getAI(GENERAL_PROMPT, message);
-
     res.json({ response });
-
   } catch (err) {
     console.log(err.message);
     res.status(500).json({ error: "AI failed" });
   }
 });
 
-// -------------------- STUDY GUIDE --------------------
-
+// STUDY GUIDE
 app.post("/api/guide", async (req, res) => {
   try {
     const { topic, userId } = req.body;
-
-    if (!topic) {
-      return res.status(400).json({ error: "Topic required" });
-    }
+    if (!topic) return res.status(400).json({ error: "Topic required" });
 
     const response = await getAI(GUIDE_PROMPT, topic);
 
@@ -144,26 +123,20 @@ app.post("/api/guide", async (req, res) => {
       content: response,
       time: Date.now()
     });
-
     saveDB(db);
 
     res.json({ response });
-
   } catch (err) {
     console.log(err.message);
     res.status(500).json({ error: "Guide failed" });
   }
 });
 
-// -------------------- SUMMARY --------------------
-
+// SUMMARY
 app.post("/api/summarize", async (req, res) => {
   try {
     const { text, userId } = req.body;
-
-    if (!text) {
-      return res.status(400).json({ error: "Text required" });
-    }
+    if (!text) return res.status(400).json({ error: "Text required" });
 
     const response = await getAI(SUMMARY_PROMPT, text);
 
@@ -173,19 +146,16 @@ app.post("/api/summarize", async (req, res) => {
       content: response,
       time: Date.now()
     });
-
     saveDB(db);
 
     res.json({ response });
-
   } catch (err) {
     console.log(err.message);
     res.status(500).json({ error: "Summary failed" });
   }
 });
 
-// -------------------- GET DATA --------------------
-
+// GET DATA
 app.get("/api/guides/:userId", (req, res) => {
   const db = loadDB();
   res.json(db.guides.filter(g => g.userId === req.params.userId));
@@ -196,10 +166,18 @@ app.get("/api/summaries/:userId", (req, res) => {
   res.json(db.summaries.filter(s => s.userId === req.params.userId));
 });
 
+// -------------------- SERVE REACT FRONTEND --------------------
+
+app.use(express.static(path.join(__dirname, "rmoney-dashboard/dist")));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "rmoney-dashboard/dist/index.html"));
+});
+
 // -------------------- START SERVER --------------------
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`API running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
